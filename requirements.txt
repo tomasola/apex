@@ -1,0 +1,7 @@
+ccxt
+flask
+pandas
+numpy
+requests
+python-dotenv
+gunicorn

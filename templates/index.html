@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APEX Terminal</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2.3">
+
+    <!-- Robust Library Loading - Pinned to v4.1.1 -->
+    <script
+        src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js?v=3"></script>
+
+    <style>
+        /* Toast Notifications */
+        #toast-container {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            background: #1e222d;
+            border-left: 4px solid var(--accent-blue);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 4px;
+            font-size: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            animation: slideIn 0.3s ease-out;
+            min-width: 200px;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Strategy Tabs */
+        .tab-header {
+            display: flex;
+            gap: 2px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 2px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #787b86;
+            font-size: 8px;
+            font-weight: bold;
+            padding: 4px 2px;
+            cursor: pointer;
+            text-transform: uppercase;
+            border-radius: 2px;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            color: var(--accent-blue);
+            background: rgba(41, 98, 255, 0.1);
+        }
+
+        .strategy-content {
+            display: none;
+        }
+
+        .strategy-content.active {
+            display: block;
+        }
+
+        /* Watchlist styles */
+        .watchlist {
+            margin-bottom: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-glass);
+            border-radius: 4px;
+            padding: 8px;
+        }
+
+        .watchlist-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 2px;
+        }
+
+        .watchlist-item:hover {
+            background: rgba(41, 98, 255, 0.1);
+        }
+
+        .watchlist-item .sym {
+            font-size: 10px;
+            font-weight: bold;
+            color: #d1d4dc;
+        }
+
+        .watchlist-item .prc {
+            font-size: 10px;
+            color: white;
+        }
+
+        .watchlist-item .chg {
+            font-size: 9px;
+            font-weight: bold;
+        }
+
+        /* Sentiment Gauge */
+        .gauge-container {
+            position: relative;
+            height: 40px;
+            margin-bottom: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+            padding: 5px;
+            text-align: center;
+        }
+
+        .gauge-bg {
+            height: 6px;
+            background: #2a2e39;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 15px;
+        }
+
+        .gauge-fill {
+            height: 100%;
+            width: 50%;
+            background: linear-gradient(90deg, var(--red) 0%, #ffd700 50%, var(--green) 100%);
+            transition: width 0.5s ease;
+        }
+
+        .gauge-needle {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            width: 2px;
+            height: 12px;
+            background: white;
+            transform-origin: bottom center;
+            transition: left 0.5s ease;
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="toast-container"></div>
+
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="logo" style="margin-bottom: 5px;">APEX</div>
+
+            <div class="watchlist">
+                <div
+                    style="font-size: 7px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px;">
+                    WATCHLIST</div>
+                <div id="watchlist-items">
+                    <!-- Dynamic Items -->
+                </div>
+            </div>
+
+            <!-- Sentiment Gauge -->
+            <div class="gauge-container">
+                <div id="sentiment-label" style="font-size: 8px; font-weight: bold; color: white;">NEUTRAL (50%)</div>
+                <div class="gauge-bg">
+                    <div class="gauge-fill"></div>
+                </div>
+                <div id="gauge-needle" class="gauge-needle" style="left: 50%;"></div>
+                <div
+                    style="display: flex; justify-content: space-between; font-size: 6px; color: var(--text-muted); margin-top: 2px;">
+                    <span>BEAR</span>
+                    <span>BULL</span>
+                </div>
+            </div>
+
+            <!-- Indicator Settings -->
+            <div
+                style="background: rgba(41, 98, 255, 0.03); padding: 10px; border-radius: 4px; border: 1px solid var(--border-glass); margin-bottom: 8px;">
+                <div class="tab-header">
+                    <button class="tab-btn active" onclick="switchStrategy(1)">Opt 1</button>
+                    <button class="tab-btn" onclick="switchStrategy(2)">Opt 2</button>
+                    <button class="tab-btn" onclick="switchStrategy(3)">Opt 3</button>
+                    <button class="tab-btn" onclick="switchStrategy(4)">Opt 4</button>
+                </div>
+
+                <!-- Strategy 1: RSI + Stoch + Supertrend (Current) -->
+                <div id="strat-1" class="strategy-content active">
+                    <div
+                        style="font-size: 8px; color: var(--accent-blue); font-weight: bold; margin-bottom: 8px; opacity: 0.7;">
+                        RSI & STOCH SETUP</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">RSI Fast</label>
+                            <input type="number" id="rsi_fast" value="5"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">RSI Slow</label>
+                            <input type="number" id="rsi_slow" value="14"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-bottom: 8px;">
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">Stoch L</label>
+                            <input type="number" id="st_len" value="14"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">K Per</label>
+                            <input type="number" id="st_k" value="14"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">Smth</label>
+                            <input type="number" id="st_smooth" value="3"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 0;">
+                        <label style="display: block; font-size: 8px; color: var(--text-muted);">ST Factor</label>
+                        <input type="number" id="st_factor" value="3.0" step="0.5"
+                            style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                    </div>
+                </div>
+
+                <!-- Strategy 2: EMA Cross -->
+                <div id="strat-2" class="strategy-content">
+                    <div
+                        style="font-size: 8px; color: var(--accent-blue); font-weight: bold; margin-bottom: 8px; opacity: 0.7;">
+                        EMA CROSS SETUP</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">EMA Fast</label>
+                            <input type="number" id="ema_fast" value="9"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">EMA Slow</label>
+                            <input type="number" id="ema_slow" value="21"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                    </div>
+                    <div style="font-size: 9px; color: var(--text-muted); font-style: italic;">Trend following strategy
+                        based on EMA crossovers.</div>
+                </div>
+                <!-- Strategy 3: MACD + ADX -->
+                <div id="strat-3" class="strategy-content">
+                    <div
+                        style="font-size: 8px; color: var(--accent-blue); font-weight: bold; margin-bottom: 8px; opacity: 0.7;">
+                        MACD + ADX SETUP</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-bottom: 8px;">
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">Fast</label>
+                            <input type="number" id="macd_fast" value="12"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">Slow</label>
+                            <input type="number" id="macd_slow" value="26"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">Sig</label>
+                            <input type="number" id="macd_signal" value="9"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">ADX Period</label>
+                            <input type="number" id="adx_period" value="14"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">Threshold</label>
+                            <input type="number" id="adx_threshold" value="25"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                    </div>
+                </div>
+                <div id="strat-4" class="strategy-content">
+                    <div
+                        style="font-size: 8px; color: var(--accent-blue); font-weight: bold; margin-bottom: 8px; opacity: 0.7;">
+                        DYNAMIC RSI & STOCH (OPT 4)</div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">RSI Fast</label>
+                            <input type="number" id="rsi_fast_4" value="5"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">RSI Slow</label>
+                            <input type="number" id="rsi_slow_4" value="14"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                    </div>
+
+                    <!-- RSI Slider -->
+                    <div style="margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <label style="font-size: 8px; color: var(--text-muted);">RSI Threshold Offset (0-25)</label>
+                            <span id="rsi_offset_val" style="font-size: 9px; color: white; font-weight: bold;">0</span>
+                        </div>
+                        <input type="range" id="rsi_offset" min="0" max="25" value="0" step="1"
+                            oninput="document.getElementById('rsi_offset_val').innerText = this.value; liveUpdate();"
+                            style="width: 100%; height: 4px; background: #2a2e39; border-radius: 2px; cursor: pointer; accent-color: var(--accent-blue);">
+                        <div
+                            style="display: flex; justify-content: space-between; font-size: 7px; color: var(--text-muted); margin-top: 2px;">
+                            <span>Sell < -Off</span>
+                                    <span>Buy > +Off</span>
+                        </div>
+                    </div>
+
+                    <!-- Stoch Slider -->
+                    <div style="margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <label style="font-size: 8px; color: var(--text-muted);">Stoch Range Offset (0-50)</label>
+                            <span id="stoch_offset_val"
+                                style="font-size: 9px; color: white; font-weight: bold;">30</span>
+                        </div>
+                        <input type="range" id="stoch_offset" min="0" max="50" value="30" step="1"
+                            oninput="document.getElementById('stoch_offset_val').innerText = this.value; liveUpdate();"
+                            style="width: 100%; height: 4px; background: #2a2e39; border-radius: 2px; cursor: pointer; accent-color: var(--accent-pink);">
+                        <div
+                            style="display: flex; justify-content: space-between; font-size: 7px; color: var(--text-muted); margin-top: 2px;">
+                            <span>Buy < 20</span>
+                                    <span>Sell > 80</span>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">Stoch L</label>
+                            <input type="number" id="st_len_4" value="14"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 8px; color: var(--text-muted);">ST Factor</label>
+                            <input type="number" id="st_factor_4" value="3.0" step="0.5"
+                                style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Capital Settings -->
+            <div
+                style="background: rgba(240, 98, 146, 0.03); padding: 10px; border-radius: 4px; border: 1px solid var(--border-glass); margin-bottom: 10px;">
+                <div
+                    style="font-size: 9px; color: var(--accent-pink); font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+                    Account & Capital</div>
+
+                <div
+                    style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 2px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                    <div style="font-size: 8px; color: var(--text-muted); margin-bottom: 2px;">REAL BALANCE (USDC)</div>
+                    <div id="real-balance" style="font-size: 14px; font-weight: bold; color: white;">0.00</div>
+                </div>
+
+                <!-- Performance Dashboard -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px;">
+                    <div
+                        style="background: rgba(38, 166, 154, 0.05); padding: 6px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.03);">
+                        <div style="font-size: 7px; color: var(--text-muted);">WIN RATE</div>
+                        <div id="win-rate" style="font-size: 11px; font-weight: bold; color: var(--green);">0%</div>
+                    </div>
+                    <div
+                        style="background: rgba(255, 255, 255, 0.03); padding: 6px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.03);">
+                        <div style="font-size: 7px; color: var(--text-muted);">DAILY PNL</div>
+                        <div id="daily-pnl" style="font-size: 11px; font-weight: bold; color: white;">$0.00</div>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 8px; color: var(--text-muted);">USDC per Trade</label>
+                    <input type="number" id="investment_amount" value="100"
+                        style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px; margin-bottom: 8px;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 8px; color: var(--text-muted);">STOP LOSS (%)</label>
+                    <input type="number" id="stop_loss_pct" value="5.0" step="0.5"
+                        style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: var(--red); border-radius: 2px; padding: 2px; font-size: 10px; font-weight: bold; margin-bottom: 8px;">
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                    <input type="checkbox" id="trailing_stop" style="cursor: pointer;">
+                    <label for="trailing_stop" style="font-size: 10px; color: white; cursor: pointer;">Enable Trailing
+                        Stop</label>
+                </div>
+
+                <!-- WhatsApp Notifications -->
+                <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px; margin-bottom: 15px;">
+                    <div
+                        style="font-size: 8px; color: var(--green); font-weight: bold; margin-bottom: 6px; text-transform: uppercase;">
+                        WhatsApp Alerts</div>
+                    <div style="margin-bottom: 5px;">
+                        <input type="text" id="whatsapp_phone" placeholder="Phone (+34...)"
+                            style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 9px;">
+                    </div>
+                    <div>
+                        <input type="text" id="whatsapp_apikey" placeholder="CallMeBot API Key"
+                            style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 9px;">
+                    </div>
+                </div>
+                <button onclick="applySettings()"
+                    style="width: 100%; background: var(--accent-blue); color: white; border: none; padding: 6px; border-radius: 2px; cursor: pointer; font-size: 9px; font-weight: bold; text-transform: uppercase;">Apply
+                    All</button>
+            </div>
+
+            <!-- Auto Trading Control -->
+            <div class="glass-pane" style="background: rgba(38, 166, 154, 0.03); padding: 10px; margin-bottom: 10px;">
+                <div
+                    style="font-size: 9px; color: var(--green); font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+                    Auto Trading Setup</div>
+
+                <div style="margin-bottom: 8px;">
+                    <label style="display: block; font-size: 8px; color: var(--text-muted); margin-bottom: 2px;">Trading
+                        Timeframe</label>
+                    <select id="trading_tf"
+                        style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px; cursor: pointer;">
+                        <option value="1m">1 minute</option>
+                        <option value="5m">5 minutes</option>
+                        <option value="15m">15 minutes</option>
+                        <option value="1h" selected>1 hour</option>
+                        <option value="1d">1 day</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                    <button id="btn-off" onclick="setTradingMode('OFF')"
+                        style="flex:1; font-size: 8px; padding: 4px; background: #2a2e39; color: white; border: 1px solid #333; cursor: pointer; border-radius: 2px;">OFF</button>
+                    <button id="btn-sim" onclick="setTradingMode('SIM')"
+                        style="flex:1; font-size: 8px; padding: 4px; background: #2a2e39; color: white; border: 1px solid #333; cursor: pointer; border-radius: 2px;">SIM</button>
+                    <button id="btn-real" onclick="setTradingMode('REAL')"
+                        style="flex:1; font-size: 8px; padding: 4px; background: #2a2e39; color: white; border: 1px solid #333; cursor: pointer; border-radius: 2px;">REAL</button>
+                </div>
+                <div id="trading-status"
+                    style="font-size: 9px; margin-top: 6px; color: var(--text-muted); text-align: center;">Status: <span
+                        style="font-weight:bold;">OFF</span></div>
+            </div>
+
+            <!-- Manual Control -->
+            <div class="glass-pane"
+                style="background: rgba(255, 255, 255, 0.02); padding: 10px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                <div
+                    style="font-size: 9px; color: var(--accent-blue); font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+                    Manual Control</div>
+                <div style="display: flex; gap: 6px;">
+                    <button id="btn-buy-manual" onclick="manualTrade('BUY')"
+                        style="flex: 1; background: var(--green); color: white; border: none; padding: 8px; border-radius: 2px; cursor: pointer; font-size: 10px; font-weight: bold;">BUY</button>
+                    <button id="btn-sell-manual" onclick="manualTrade('SELL')"
+                        style="flex: 1; background: var(--red); color: white; border: none; padding: 8px; border-radius: 2px; cursor: pointer; font-size: 10px; font-weight: bold;">SELL</button>
+                </div>
+                <button onclick="panicButton()"
+                    style="width: 100%; margin-top: 10px; background: rgba(228, 44, 105, 0.1); border: 1px solid #e42c69; color: #e42c69; font-weight: bold; font-size: 9px; padding: 6px; border-radius: 2px; cursor: pointer; text-transform: uppercase;">
+                    ⚠️ PANIC (CLOSE ALL)
+                </button>
+            </div>
+
+            <div id="symbol-list"></div>
+            <div style="margin-top:auto;">
+                <div style="font-size: 10px; color: #787b86; margin-bottom: 5px; text-transform: uppercase;">Signal
+                </div>
+                <div id="main-signal" class="signal-val">...</div>
+            </div>
+        </aside>
+
+        <main class="main-content" style="grid-template-rows: 48px 1fr auto auto;">
+            <header class="top-bar">
+                <div id="active-symbol" style="font-size: 14px; font-weight: 600;">BTC/USDC</div>
+                <div id="tf-selector">
+                    <button class="tf-btn" onclick="setTimeframe('1m')">1m</button>
+                    <button class="tf-btn" onclick="setTimeframe('5m')">5m</button>
+                    <button class="tf-btn" onclick="setTimeframe('15m')">15m</button>
+                </div>
+                <div class="header-actions">
+                    <button class="tf-btn active" onclick="setTimeframe('1h')">1h</button>
+                    <button class="tf-btn" onclick="setTimeframe('4h')">4h</button>
+                    <button class="tf-btn" onclick="setTimeframe('1d')">1d</button>
+                    <button onclick="runBacktest()"
+                        style="background: rgba(255,215,0,0.1); border: 1px solid #ffd700; color: #ffd700; font-size: 9px; padding: 2px 8px; border-radius: 2px; cursor: pointer; margin-left:10px;">BACKTEST</button>
+                </div>
+            </header>
+
+            <main class="charts-grid">
+                <div class="pane-tv" id="c-price"></div>
+                <div class="panes-indicators" id="indicator-container">
+                    <!-- Opt 1 -->
+                    <div id="group-1" class="indicator-group active">
+                        <div class="indicator-pane" id="c-rsi"></div>
+                        <div class="indicator-pane" id="c-stoch"></div>
+                    </div>
+                    <!-- Opt 2 (EMA Cross) -->
+                    <div id="group-2" class="indicator-group">
+                        <div class="indicator-pane" id="c-ema-diff" style="height: 100%;"></div>
+                    </div>
+                    <!-- Opt 3 (MACD+ADX) -->
+                    <div id="group-3" class="indicator-group">
+                        <div class="indicator-pane" id="c-macd" style="height: 150px;"></div>
+                        <div class="indicator-pane" id="c-adx" style="height: 150px;"></div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Trade History Section -->
+            <div
+                style="padding: 10px; font-size: 11px; border-bottom: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <span style="font-weight: bold; color: var(--accent-blue);">RECENT TRADES (USDC)</span>
+                    <button onclick="clearHistory()"
+                        style="background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--text-muted); font-size: 8px; padding: 2px 6px; border-radius: 2px; cursor: pointer;">ELIMINAR
+                        TODO</button>
+                </div>
+                <span id="history-pnl" style="font-weight: bold;">TOTAL PnL: 0%</span>
+            </div>
+            <div
+                style="flex: 1; overflow-y: auto; height: 160px; min-height: 160px; background: rgba(0,0,0,0.1); margin: 0 0 10px 0; border-top: 1px solid var(--border-glass);">
+                <table style="width: 100%; font-size: 10px; border-collapse: collapse; text-align: left;">
+                    <thead
+                        style="background: var(--bg-sidebar); color: var(--text-muted); position: sticky; top: 0; z-index: 5;">
+                        <tr>
+                            <th style="padding: 8px;">Symbol</th>
+                            <th style="padding: 8px;">Mode</th>
+                            <th style="padding: 8px;">Entry</th>
+                            <th style="padding: 8px;">Exit</th>
+                            <th style="padding: 8px;">PnL ($)</th>
+                            <th style="padding: 8px;">PnL (%)</th>
+                            <th style="padding: 8px;">Status</th>
+                            <th style="padding: 8px; text-align: center;">Acc</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trade-history-body">
+                        <!-- History injected here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Profit Curve Section -->
+            <div
+                style="margin: 0 20px 10px 20px; background: var(--bg-card); border-radius: 8px; padding: 10px; border: 1px solid var(--border-glass);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <div
+                        style="font-size: 9px; font-weight: bold; color: white; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: var(--accent-blue);">●</span> PROFIT CURVE (EQUITY)
+                    </div>
+                </div>
+                <div id="c-profit" style="height: 80px; width: 100%;"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Use VAR for extreme compatibility (ES5)
+        // Use VAR for extreme compatibility (ES5)
+        var currentSymbol = "BTC/USDC";
+        var currentTimeframe = "1h";
+        var charts = {};
+        var series = {};
+        var lastTradeCount = -1;
+        var lastActiveCount = -1;
+        var audioCtx = null;
+        var entryPriceLine = null;
+        var activePosition = null; // Store current active pos details
+        var activeStrategy = 1;
+        var profitSeries = null;
+        var rsiLines = [];
+        var stochLines = [];
+        var liveUpdateTimer = null;
+
+        function liveUpdate() {
+            if (typeof updatePriceLines === 'function') updatePriceLines();
+            if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
+            liveUpdateTimer = setTimeout(function () {
+                applySettings(true); // Silent apply
+            }, 300);
+        }
+
+        function playAlert() {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            } catch (e) { console.log("Audio fail:", e); }
+        }
+
+        function showToast(msg, type) {
+            var container = document.getElementById('toast-container');
+            var toast = document.createElement('div');
+            toast.className = 'toast';
+            if (type === 'sell') toast.style.borderLeftColor = 'var(--red)';
+            if (type === 'buy') toast.style.borderLeftColor = 'var(--green)';
+            toast.innerHTML = '<strong>' + (type ? type.toUpperCase() : 'NOTIFICATION') + '</strong><br>' + msg;
+            container.appendChild(toast);
+            setTimeout(function () {
+                toast.style.opacity = '0';
+                setTimeout(function () { container.removeChild(toast); }, 500);
+            }, 5000);
+        }
+
+        // Global Error Catcher
+        window.onerror = function (msg, url, line) {
+            console.error("JS ERR: " + msg + " (L" + line + ")");
+            return false;
+        };
+
+        function init() {
+            if (typeof LightweightCharts === 'undefined') {
+                console.error("LightweightCharts NOT LOADED");
+                return;
+            }
+
+            console.log("LightweightCharts object:", LightweightCharts);
+
+            try {
+                // Price Chart
+                var pCont = document.getElementById('c-price');
+                charts.price = LightweightCharts.createChart(pCont, {
+                    layout: {
+                        background: { type: 'solid', color: '#131722' },
+                        textColor: '#d1d4dc',
+                        fontSize: 11
+                    },
+                    grid: {
+                        vertLines: { color: '#1e222d' },
+                        horzLines: { color: '#1e222d' }
+                    },
+                    width: pCont.clientWidth,
+                    height: pCont.clientHeight || 400
+                });
+
+                if (!charts.price || typeof charts.price.addCandlestickSeries !== 'function') {
+                    throw new Error("createChart failed or addCandlestickSeries missing. Type: " + typeof charts.price);
+                }
+                series.candles = charts.price.addCandlestickSeries({
+                    upColor: '#26a69a',
+                    downColor: '#ef5350',
+                    borderVisible: false,
+                    wickUpColor: '#26a69a',
+                    wickDownColor: '#ef5350'
+                });
+
+                // --- INDICATOR INITIALIZATION ---
+
+                // Group 1: RSI (Pane 1), STOCH (Pane 2)
+                var rCont = document.getElementById('c-rsi');
+                charts.rsi = LightweightCharts.createChart(rCont, {
+                    layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc', fontSize: 10 },
+                    grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
+                    width: rCont.clientWidth, height: 150
+                });
+                series.rsi = charts.rsi.addLineSeries({ color: '#2962ff', lineWidth: 2 });
+
+                var sCont = document.getElementById('c-stoch');
+                charts.stoch = LightweightCharts.createChart(sCont, {
+                    layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc', fontSize: 10 },
+                    grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
+                    width: sCont.clientWidth, height: 150
+                });
+                series.st_k = charts.stoch.addLineSeries({ color: '#f06292', lineWidth: 1.5 });
+                series.st_trend = charts.stoch.addLineSeries({ color: '#ef5350', lineStyle: 2, lineWidth: 1 });
+
+                // Group 2: EMA Diff
+                var eCont = document.getElementById('c-ema-diff');
+                charts.ema = LightweightCharts.createChart(eCont, {
+                    layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc', fontSize: 10 },
+                    grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
+                    width: eCont.clientWidth, height: 300
+                });
+                series.ema_f = charts.ema.addLineSeries({ color: '#26a69a', lineWidth: 2, title: 'EMA Fast' });
+                series.ema_s = charts.ema.addLineSeries({ color: '#ef5350', lineWidth: 2, title: 'EMA Slow' });
+
+                // Group 3: MACD & ADX
+                var mCont = document.getElementById('c-macd');
+                charts.macd = LightweightCharts.createChart(mCont, {
+                    layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc', fontSize: 10 },
+                    grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
+                    width: mCont.clientWidth, height: 150
+                });
+                series.macd_hist = charts.macd.addHistogramSeries({ color: '#26a69a', lineWidth: 1 });
+                series.macd_line = charts.macd.addLineSeries({ color: '#2962ff', lineWidth: 1.5 });
+                series.macd_sig = charts.macd.addLineSeries({ color: '#ffd700', lineWidth: 1.5 });
+
+                var aCont = document.getElementById('c-adx');
+                charts.adx = LightweightCharts.createChart(aCont, {
+                    layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc', fontSize: 10 },
+                    grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
+                    width: aCont.clientWidth, height: 150
+                });
+                series.adx = charts.adx.addLineSeries({ color: '#f44336', lineWidth: 2, title: 'ADX' });
+
+                // Simple Resize
+                window.onresize = function () {
+                    charts.price.resize(pCont.clientWidth, 300);
+                    charts.profit.resize(document.getElementById('c-profit').clientWidth, 80);
+
+                    // Resize all indicator charts
+                    charts.rsi.resize(rCont.clientWidth, 150);
+                    charts.stoch.resize(sCont.clientWidth, 150);
+                    charts.ema.resize(eCont.clientWidth, 300);
+                    charts.macd.resize(mCont.clientWidth, 150);
+                    charts.adx.resize(aCont.clientWidth, 150);
+                };
+
+                // Profit Curve
+                var prCont = document.getElementById('c-profit');
+                charts.profit = LightweightCharts.createChart(prCont, {
+                    layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#d1d4dc', fontSize: 10 },
+                    grid: { vertLines: { visible: false }, horzLines: { color: '#1e222d' } },
+                    width: prCont.clientWidth, height: 80,
+                    timeScale: { borderVisible: false }
+                });
+                profitSeries = charts.profit.addLineSeries({
+                    color: '#2962ff',
+                    lineWidth: 2,
+                    lineType: 2,
+                    lastValueVisible: false,
+                    priceLineVisible: false
+                });
+
+                update();
+                updateWatchlist();
+                setInterval(updateWatchlist, 30000);
+            } catch (e) {
+                console.error("INIT FAIL: " + e.message);
+            }
+        }
+
+        function setTimeframe(tf) {
+            currentTimeframe = tf;
+            // Update UI
+            var btns = document.getElementsByClassName('tf-btn');
+            for (var i = 0; i < btns.length; i++) {
+                btns[i].classList.remove('active');
+                if (btns[i].innerText === tf) {
+                    btns[i].classList.add('active');
+                }
+            }
+            update();
+        }
+
+        function update() {
+            var url = "/api/history/" + encodeURIComponent(currentSymbol) + "?tf=" + currentTimeframe;
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", url, true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        try {
+                            var data = JSON.parse(xhr.responseText);
+                            if (data.candles) series.candles.setData(data.candles);
+
+                            // Contextual data based on strategy
+                            if (activeStrategy === 1 || activeStrategy === 4) {
+                                if (data.rsi_div) series.rsi.setData(data.rsi_div);
+                                if (data.stoch_rsi) series.st_k.setData(data.stoch_rsi);
+                                if (data.st_trend) series.st_trend.setData(data.st_trend);
+                            } else if (activeStrategy === 2) {
+                                if (data.ema_f) series.ema_f.setData(data.ema_f);
+                                if (data.ema_s) series.ema_s.setData(data.ema_s);
+                            } else if (activeStrategy === 3) {
+                                if (data.hist) series.macd_hist.setData(data.hist);
+                                if (data.macd) series.macd_line.setData(data.macd);
+                                if (data.signal) series.macd_sig.setData(data.signal);
+                                if (data.adx) series.adx.setData(data.adx);
+                            }
+
+                            // Merge base signals with active entry marker
+                            var markers = data.signals || [];
+                            if (activePosition && activePosition.symbol === currentSymbol) {
+                                markers.push({
+                                    time: Math.floor(activePosition.entry_timestamp / 60) * 60, // Align to minute
+                                    position: 'inBar',
+                                    color: '#2962ff',
+                                    shape: 'circle',
+                                    text: 'ENTRY'
+                                });
+                            }
+                            series.candles.setMarkers(markers);
+                            if (series.rsi) series.rsi.setMarkers(markers);
+                            if (series.st_k) series.st_k.setMarkers(markers);
+
+                            charts.price.timeScale().fitContent();
+                            updateTradeHistory();
+                            updateBalance();
+
+                            // Sentiment Gauge update
+                            if (data.sentiment !== undefined) {
+                                document.getElementById('sentiment-label').innerText =
+                                    (data.sentiment > 60 ? "BULLISH" : (data.sentiment < 40 ? "BEARISH" : "NEUTRAL")) + " (" + data.sentiment + "%)";
+                                document.getElementById('gauge-needle').style.left = data.sentiment + "%";
+                            }
+                        } catch (e) {
+                            console.error("PARSE ERR", e);
+                        }
+                    } else {
+                        console.error("HTTP " + xhr.status);
+                    }
+                }
+            };
+            xhr.send();
+        }
+
+        function applySettings(isSilent) {
+            var params = {
+                rsi_fast: document.getElementById('rsi_fast').value,
+                rsi_slow: document.getElementById('rsi_slow').value,
+                stoch_rsi_len: document.getElementById('st_len').value,
+                stoch_k_period: document.getElementById('st_k').value,
+                stoch_smooth_k: document.getElementById('st_smooth').value,
+                st_factor: document.getElementById('st_factor').value,
+                investment_amount: document.getElementById('investment_amount').value,
+                trading_timeframe: document.getElementById('trading_tf').value,
+                stop_loss_pct: document.getElementById('stop_loss_pct').value,
+                trailing_stop: document.getElementById('trailing_stop').checked,
+                active_strategy: activeStrategy,
+                ema_fast: document.getElementById('ema_fast').value,
+                ema_slow: document.getElementById('ema_slow').value,
+                macd_fast: document.getElementById('macd_fast').value,
+                macd_slow: document.getElementById('macd_slow').value,
+                macd_signal: document.getElementById('macd_signal').value,
+                adx_period: document.getElementById('adx_period').value,
+                adx_threshold: document.getElementById('adx_threshold').value,
+                // Strategy 4 Fields
+                rsi_fast_4: document.getElementById('rsi_fast_4').value,
+                rsi_slow_4: document.getElementById('rsi_slow_4').value,
+                rsi_offset: document.getElementById('rsi_offset').value,
+                st_len_4: document.getElementById('st_len_4').value,
+                st_factor_4: document.getElementById('st_factor_4').value,
+                stoch_offset: document.getElementById('stoch_offset').value,
+                whatsapp_phone: document.getElementById('whatsapp_phone').value,
+                whatsapp_apikey: document.getElementById('whatsapp_apikey').value
+            };
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/api/trading/params", true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    if (!isSilent) showNotification("Settings Applied Successfully", "success");
+                    update(); // Refresh with new signals
+                }
+            };
+            xhr.send(JSON.stringify(params));
+        }
+
+        function switchStrategy(id) {
+            activeStrategy = id;
+            var btns = document.querySelectorAll('.tab-btn');
+            btns.forEach(function (b, i) {
+                b.classList.toggle('active', (i + 1) === id);
+            });
+            var contents = document.querySelectorAll('.strategy-content');
+            contents.forEach(function (c, i) {
+                c.classList.toggle('active', (i + 1) === id);
+            });
+
+            // Switch Indicator Groups
+            var groups = document.querySelectorAll('.indicator-group');
+            // If strategy is 4, show group 1 (RSI/Stoch)
+            var targetGroup = (id === 4) ? 1 : id;
+            groups.forEach(function (g, i) {
+                g.classList.toggle('active', (i + 1) === targetGroup);
+            });
+
+            // Force Resize to handle width issues when showing hidden containers
+            setTimeout(function () {
+                window.onresize();
+            }, 50);
+
+            updatePriceLines();
+
+            console.log("Strategy switched to: " + id);
+        }
+
+        function updatePriceLines() {
+            if (!series.rsi || !series.st_k) return;
+
+            // Clear old lines
+            rsiLines.forEach(function (l) { try { series.rsi.removePriceLine(l); } catch (e) { } });
+            stochLines.forEach(function (l) { try { series.st_k.removePriceLine(l); } catch (e) { } });
+            rsiLines = [];
+            stochLines = [];
+
+            if (activeStrategy !== 4) return;
+
+            var rsiOff = parseFloat(document.getElementById('rsi_offset').value) || 0;
+            var stochOff = parseFloat(document.getElementById('stoch_offset').value) || 0;
+
+            // RSI Lines (Symmetric ±offset)
+            var rBuy = rsiOff;
+            var rSell = -rsiOff;
+
+            rsiLines.push(series.rsi.createPriceLine({
+                price: rBuy, color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BUY > ' + rBuy
+            }));
+            rsiLines.push(series.rsi.createPriceLine({
+                price: rSell, color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SELL < ' + rSell
+            }));
+
+            // Stoch Lines
+            var sBuy = 50 - stochOff;
+            var sSell = 50 + stochOff;
+
+            stochLines.push(series.st_k.createPriceLine({
+                price: sBuy, color: '#26a69a', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'BUY < ' + sBuy
+            }));
+            stochLines.push(series.st_k.createPriceLine({
+                price: sSell, color: '#ef5350', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SELL > ' + sSell
+            }));
+        }
+
+        function setTradingMode(mode) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/api/trading/mode", true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var btns = ['OFF', 'SIM', 'REAL'];
+                    btns.forEach(function (b) {
+                        var btn = document.getElementById('btn-' + b.toLowerCase());
+                        btn.style.background = (b === mode) ? 'var(--accent-blue)' : '#2a2e39';
+                        btn.style.borderColor = (b === mode) ? 'var(--accent-blue)' : '#333';
+                    });
+                    document.getElementById('trading-status').querySelector('span').innerText = mode;
+                    document.getElementById('trading-status').querySelector('span').style.color = (mode === 'REAL' ? 'var(--red)' : (mode === 'SIM' ? 'var(--green)' : 'var(--text-muted)'));
+                }
+            };
+            xhr.send(JSON.stringify({ mode: mode }));
+        }
+
+        function manualTrade(action) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/api/trading/manual", true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    var data = JSON.parse(xhr.responseText);
+                    if (xhr.status === 200) {
+                        showToast(data.message, action.toLowerCase() === 'buy' ? 'buy' : 'sell');
+                        playAlert();
+                        updateTradeHistory();
+                        updateBalance();
+                    } else {
+                        showToast("ERROR: " + data.message, "sell");
+                    }
+                }
+            };
+            xhr.send(JSON.stringify({ action: action, symbol: currentSymbol }));
+        }
+
+        function updateWatchlist() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/api/watchlist", true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var data = JSON.parse(xhr.responseText);
+                    var html = "";
+                    data.watchlist.forEach(function (item) {
+                        var color = item.change >= 0 ? "var(--green)" : "var(--red)";
+                        var sign = item.change >= 0 ? "+" : "";
+                        html += '<div class="watchlist-item" onclick="switchAsset(\'' + item.symbol + '\')">' +
+                            '<span class="sym">' + item.symbol.split('/')[0] + '</span>' +
+                            '<span class="prc">$' + item.price.toLocaleString() + '</span>' +
+                            '<span class="chg" style="color:' + color + '">' + sign + item.change + '%</span>' +
+                            '</div>';
+                    });
+                    document.getElementById('watchlist-items').innerHTML = html;
+                }
+            };
+            xhr.send();
+        }
+
+        function switchAsset(sym) {
+            currentSymbol = sym;
+            document.getElementById('active-symbol').innerText = sym;
+            update();
+        }
+
+        function runBacktest() {
+            showToast("BACKTEST STARTED... Please wait", "");
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/api/backtest?symbol=" + encodeURIComponent(currentSymbol) + "&tf=" + currentTimeframe, true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var out = JSON.parse(xhr.responseText);
+                    alert("BACKTEST RESULTS (" + out.symbol + ")\n\n" +
+                        "Net Profit: " + out.net_profit + "\n" +
+                        "Total Trades: " + out.trades + "\n" +
+                        "Win Rate: " + out.win_rate + "\n" +
+                        "Period: " + out.period);
+                }
+            };
+            xhr.send();
+        }
+
+        function updateTradeHistory() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/api/trading/history", true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var data = JSON.parse(xhr.responseText);
+                    document.getElementById('history-pnl').innerText = "TOTAL PnL: " + (data.total_pnl || 0) + "%";
+
+                    if (data.profit_curve && profitSeries) {
+                        profitSeries.setData(data.profit_curve);
+                        charts.profit.timeScale().fitContent();
+                    }
+
+                    var body = document.getElementById('trade-history-body');
+                    body.innerHTML = "";
+
+                    // Update Performance Dashboard
+                    document.getElementById('win-rate').innerText = (data.win_rate || 0) + "%";
+                    var dpnl = document.getElementById('daily-pnl');
+                    dpnl.innerText = "$" + (data.daily_pnl || 0).toFixed(2);
+                    dpnl.style.color = data.daily_pnl > 0 ? "var(--green)" : (data.daily_pnl < 0 ? "var(--red)" : "white");
+
+                    data.history.forEach(function (t, i) {
+                        var row = document.createElement('tr');
+                        row.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+                        var pnlColor = t.pnl_pct >= 0 ? 'var(--green)' : 'var(--red)';
+
+                        row.innerHTML =
+                            '<td style="padding: 8px;">' + t.symbol + '</td>' +
+                            '<td style="padding: 8px;">' + t.mode + '</td>' +
+                            '<td style="padding: 8px;">' + t.entry_price.toFixed(2) + '</td>' +
+                            '<td style="padding: 8px;">' + t.exit_price.toFixed(2) + '</td>' +
+                            '<td style="padding: 8px; color:' + pnlColor + ';">' + (t.pnl ? t.pnl.toFixed(2) : '0.00') + '</td>' +
+                            '<td style="padding: 8px; color:' + pnlColor + ';">' + t.pnl_pct + '%</td>' +
+                            '<td style="padding: 8px; font-weight:bold; color:' + pnlColor + ';">' + t.status + '</td>' +
+                            '<td style="padding: 8px; text-align:center;"><button onclick="deleteTrade(' + (data.history.length - 1 - i) + ')" style="background:transparent; border:none; cursor:pointer; color:rgba(255,255,255,0.3); font-size:12px;">✕</button></td>';
+                        body.appendChild(row);
+                    });
+
+                    // Update Active Entry Visualization
+                    activePosition = data.active_positions[currentSymbol] || null;
+
+                    if (activePosition) {
+                        var price = activePosition.entry_price;
+                        if (!entryPriceLine) {
+                            entryPriceLine = series.candles.createPriceLine({
+                                price: price,
+                                color: '#2962ff',
+                                lineWidth: 2,
+                                lineStyle: 2, // LargeDashed
+                                axisLabelVisible: true,
+                                title: 'ENTRY',
+                            });
+                        } else {
+                            entryPriceLine.applyOptions({ price: price });
+                        }
+                    } else {
+                        if (entryPriceLine) {
+                            series.candles.removePriceLine(entryPriceLine);
+                            entryPriceLine = null;
+                        }
+                    }
+
+                    // Check for NEW trades
+                    if (lastTradeCount !== -1 && data.trades_count > lastTradeCount && data.history.length > 0) {
+                        var newTrade = data.history[0]; // Newest
+                        playAlert();
+                        showToast(newTrade.symbol + " closed at " + newTrade.exit_price + " with " + newTrade.pnl_pct + "%", newTrade.status.toLowerCase() === 'win' ? 'buy' : 'sell');
+                    }
+                    lastTradeCount = data.trades_count;
+
+                    // Check for NEW active positions (Open)
+                    if (lastActiveCount !== -1 && data.active_count > lastActiveCount) {
+                        playAlert();
+                        showToast("NEW POSITION OPENED (Check chart for details)", "buy");
+                    }
+                    lastActiveCount = data.active_count;
+
+                    var pnlEl = document.getElementById('history-pnl');
+                    pnlEl.innerText = "TOTAL PnL: " + data.total_pnl + "%";
+                    pnlEl.style.color = data.total_pnl >= 0 ? 'var(--green)' : 'var(--red)';
+                }
+            };
+            xhr.send();
+        }
+
+        function panicButton() {
+            if (!confirm("¿ESTÁS SEGURO? Se cerrarán TODAS las posiciones activas (SIM y REAL).")) return;
+            fetch('/api/trading/panic', { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) { showToast(d.message, 'sell'); update(); });
+        }
+
+        function clearHistory() {
+            if (!confirm("¿Eliminar todo el historial de operaciones?")) return;
+            fetch('/api/history/clear', { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) { showToast("Historial eliminado", 'sell'); updateTradeHistory(); });
+        }
+
+        function deleteTrade(index) {
+            fetch('/api/history/delete/' + index, { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) { showToast("Operación eliminada", 'sell'); updateTradeHistory(); });
+        }
+
+        function updateBalance() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "/api/trading/balance", true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var data = JSON.parse(xhr.responseText);
+                    document.getElementById('real-balance').innerText = data.balance.toFixed(2);
+                }
+            };
+            xhr.send();
+        }
+
+        window.onload = function () {
+            setTimeout(init, 500);
+            // Auto-refresh every 30 seconds
+            setInterval(update, 30000);
+        };
+    </script>
+</body>
+
+</html>

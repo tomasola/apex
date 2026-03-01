@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: apex-terminal
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -c gunicorn_config.py dashboard:app
+    envVars:
+      - key: BINANCE_API_KEY
+        sync: false
+      - key: BINANCE_API_SECRET
+        sync: false
+      - key: PORT
+        value: 5001
+      - key: PYTHON_VERSION
+        value: 3.9.18
