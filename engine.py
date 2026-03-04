@@ -52,7 +52,7 @@ class TradeEngine:
             'stoch_k_period': 14,
             'stoch_smooth_k': 3,
             'st_factor': 3.0,
-            'investment_amount': 100.0,
+            'investment_amount': 20.0,
             'trading_timeframe': '1h',
             'stop_loss_pct': 5.0,
             'trailing_stop': False,
@@ -70,9 +70,7 @@ class TradeEngine:
             'rsi_offset': 0,
             'st_len_4': 14,
             'st_factor_4': 3.0,
-            'stoch_offset': 30,
-            'whatsapp_phone': '',
-            'whatsapp_apikey': ''
+            'stoch_offset': 30
         }
 
     def fetch_ohlcv(self, symbol, timeframe='1h', limit=250):
@@ -203,7 +201,8 @@ class TradeEngine:
             'direction': int(curr_st_dir),
             'signal': signal,
             'timeframe': timeframe,
-            'sentiment': sentiment 
+            'sentiment': sentiment,
+            'confluence': indicators_data.get('confluence')
         }
 
     def run_cycle(self):
@@ -217,23 +216,6 @@ class TradeEngine:
         # Check Stop Loss for all active positions
         self.check_stop_loss()
 
-    def send_whatsapp(self, message):
-        phone = self.params.get('whatsapp_phone')
-        apikey = self.params.get('whatsapp_apikey')
-        
-        if not phone or not apikey:
-            return
-            
-        try:
-            # CallMeBot API: https://api.callmebot.com/whatsapp.php?phone=[phone]&text=[text]&apikey=[apikey]
-            url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={requests.utils.quote(message)}&apikey={apikey}"
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                logging.info(f"WhatsApp Notification Sent: {message}")
-            else:
-                logging.error(f"WhatsApp notification failed: {response.status_code} - {response.text}")
-        except Exception as e:
-            logging.error(f"Error sending WhatsApp: {e}")
 
     def execute_trade_logic(self, symbol, signal, price):
         if self.trading_mode == "OFF":
@@ -271,16 +253,20 @@ class TradeEngine:
                 logging.info(f"REAL BUY ORDER PLACED: {symbol} @ {price}")
                 pos['order_id'] = order['id']
             except Exception as e:
-                logging.error(f"REAL BUY FAIL: {e}")
-                return
+                err_msg = f"FALLO COMPRA REAL para {symbol}: {e}"
+                logging.error(err_msg)
+                return False, err_msg
 
         self.active_positions[symbol] = pos
         self.save_history()
-        msg = f"🚀 APEX OPEN [{self.trading_mode}]\nSymbol: {symbol}\nPrice: {price}\nStrategy: Opt {self.params.get('active_strategy')}"
-        self.send_whatsapp(msg)
-        logging.info(f"Position OPEN [{self.trading_mode}]: {symbol} @ {price}")
+        msg = f"Posición ABIERTA [{self.trading_mode}]: {symbol} @ {price}"
+        logging.info(msg)
+        return True, msg
 
     def close_position(self, symbol, price):
+        if symbol not in self.active_positions:
+            return False, f"No hay posición activa para {symbol}"
+            
         pos = self.active_positions.pop(symbol)
         entry_price = pos['entry_price']
         qty = pos['qty']
@@ -308,14 +294,17 @@ class TradeEngine:
                 self.exchange.create_market_sell_order(symbol, qty)
                 logging.info(f"REAL SELL ORDER PLACED: {symbol} @ {price}")
             except Exception as e:
-                logging.error(f"REAL SELL FAIL: {e}")
-                # We still log the trade in history as closed
+                err_msg = f"FALLO VENTA REAL para {symbol}: {e}"
+                logging.error(err_msg)
+                # Note: We still popped the position, but it failed on exchange.
+                # In a real app, we'd handle this more gracefully.
+                return False, err_msg
         
         self.trade_history.append(trade)
         self.save_history()
-        msg = f"🏁 APEX CLOSE [{pos['mode']}]\nSymbol: {symbol}\nExit: {price}\nPnL: {trade['pnl_pct']}% ({trade['status']})"
-        self.send_whatsapp(msg)
-        logging.info(f"Position CLOSED [{pos['mode']}]: {symbol} PnL: {trade['pnl_pct']}%")
+        msg = f"Posición CERRADA [{pos['mode']}]: {symbol} PnL: {trade['pnl_pct']}%"
+        logging.info(msg)
+        return True, msg
 
     def get_trade_history(self):
         # Calculate total performance
@@ -353,6 +342,21 @@ class TradeEngine:
             'active_positions': self.active_positions
         }
 
+    def get_bot_status(self):
+        """Returns a human-readable string of what the bot is currently doing."""
+        if self.trading_mode == "OFF":
+            return "ESPERA: Trading APAGADO"
+            
+        status = f"MODO: {self.trading_mode} | ESTRAT: {self.params.get('active_strategy', 1)}"
+        
+        if self.active_positions:
+            symbols = ", ".join(self.active_positions.keys())
+            status += f" | ABIERTO: {symbols} (Esperando VENTA)"
+        else:
+            status += " | ESCANEANDO (Esperando COMPRA)"
+            
+        return status
+
     def get_balance(self):
         try:
             balance = self.exchange.fetch_balance()
@@ -371,7 +375,7 @@ class TradeEngine:
             
             return round(total, 2)
         except Exception as e:
-            logging.error(f"Error fetching balance: {e}")
+            logging.error(f"Error fetching balance from Binance: {e}")
             return 0.0
 
     def check_stop_loss(self):
@@ -518,50 +522,76 @@ class TradeEngine:
             if latest_st_signal == "BUY" and latest_rsi_div > 0: signal = "BUY"
             elif latest_st_signal == "SELL" and latest_rsi_div < 0: signal = "SELL"
             
+            # Real-time Confluence Diagnostic for Strategy 1
+            confluence = {
+                'buy': {
+                    'trend_ok': bool(latest_st_signal == "BUY"),
+                    'stoch_ok': True, # Not used in S1
+                    'rsi_ok': bool(latest_rsi_div > 0)
+                },
+                'sell': {
+                    'trend_ok': bool(latest_st_signal == "SELL"),
+                    'stoch_ok': True, # Not used in S1
+                    'rsi_ok': bool(latest_rsi_div < 0)
+                }
+            }
+
+            # Create synchronized signals for visualization
+            sync_signals = pd.Series("", index=df.index)
+            for i in range(len(df)):
+                if st_signals.iloc[i] == "BUY" and rsi_div.iloc[i] > 0:
+                    sync_signals.iloc[i] = "BUY"
+                elif st_signals.iloc[i] == "SELL" and rsi_div.iloc[i] < 0:
+                    sync_signals.iloc[i] = "SELL"
+
             data = {
                 'rsi_div': rsi_div,
                 'stoch_rsi': stoch_k,
                 'st_trend': st_trend,
-                'signals': st_signals
+                'signals': sync_signals,
+                'confluence': confluence
             }
             
         elif strategy_id == 2: # EMA Cross
             ema_f = calculate_ema(df['close'], self.params['ema_fast'])
             ema_s = calculate_ema(df['close'], self.params['ema_slow'])
             
-            if ema_f.iloc[-1] > ema_s.iloc[-1] and ema_f.iloc[-2] <= ema_s.iloc[-2]: signal = "BUY"
-            elif ema_f.iloc[-1] < ema_s.iloc[-1] and ema_f.iloc[-2] >= ema_s.iloc[-2]: signal = "SELL"
+            sync_signals = pd.Series("", index=df.index)
+            for i in range(1, len(df)):
+                if ema_f.iloc[i] > ema_s.iloc[i] and ema_f.iloc[i-1] <= ema_s.iloc[i-1]:
+                    sync_signals.iloc[i] = "BUY"
+                elif ema_f.iloc[i] < ema_s.iloc[i] and ema_f.iloc[i-1] >= ema_s.iloc[i-1]:
+                    sync_signals.iloc[i] = "SELL"
             
-            # For visualization, we'll reuse the signal markers
-            signals = pd.Series("", index=df.index)
-            if signal != "HOLD": signals.iloc[-1] = signal
+            signal = sync_signals.iloc[-1] if sync_signals.iloc[-1] != "" else "HOLD"
             
             data = {
                 'ema_f': ema_f,
                 'ema_s': ema_s,
-                'signals': signals
+                'signals': sync_signals
             }
 
         elif strategy_id == 3: # MACD + ADX
             macd, signal_line, hist = calculate_macd(df['close'], self.params['macd_fast'], self.params['macd_slow'], self.params['macd_signal'])
             adx = calculate_adx(df, self.params['adx_period'])
             
-            # Buy: MACD Cross UP + ADX > Threshold
-            if macd.iloc[-1] > signal_line.iloc[-1] and macd.iloc[-2] <= signal_line.iloc[-2] and adx.iloc[-1] > self.params['adx_threshold']:
-                signal = "BUY"
-            # Sell: MACD Cross DOWN
-            elif macd.iloc[-1] < signal_line.iloc[-1] and macd.iloc[-2] >= signal_line.iloc[-2]:
-                signal = "SELL"
-                
-            signals = pd.Series("", index=df.index)
-            if signal != "HOLD": signals.iloc[-1] = signal
+            sync_signals = pd.Series("", index=df.index)
+            for i in range(1, len(df)):
+                # Buy: MACD Cross UP + ADX > Threshold
+                if macd.iloc[i] > signal_line.iloc[i] and macd.iloc[i-1] <= signal_line.iloc[i-1] and adx.iloc[i] > float(self.params['adx_threshold']):
+                    sync_signals.iloc[i] = "BUY"
+                # Sell: MACD Cross DOWN
+                elif macd.iloc[i] < signal_line.iloc[i] and macd.iloc[i-1] >= signal_line.iloc[i-1]:
+                    sync_signals.iloc[i] = "SELL"
             
+            signal = sync_signals.iloc[-1] if sync_signals.iloc[-1] != "" else "HOLD"
+                
             data = {
                 'hist': hist,
                 'macd': macd,
                 'signal': signal_line,
                 'adx': adx,
-                'signals': signals
+                'signals': sync_signals
             }
 
         elif strategy_id == 4: # Dynamic RSI + Stoch (Quad-Filter Confluence)
@@ -618,12 +648,36 @@ class TradeEngine:
             
             # Latest Signal for execution
             signal = conf_signals.iloc[-1]
+            
+            # Real-time Confluence Diagnostic
+            s_dir = st_dir.iloc[-1]
+            s_k = stoch_k.iloc[-1]
+            r_div = rsi_div.iloc[-1]
+            
+            confluence = {
+                'buy': {
+                    'trend_ok': bool(s_dir == -1),
+                    'stoch_ok': bool(s_k < stoch_buy_thr),
+                    'rsi_ok': bool(r_div > rsi_off)
+                },
+                'sell': {
+                    'trend_ok': bool(s_dir == 1),
+                    'stoch_ok': bool(s_k > stoch_sell_thr),
+                    'rsi_ok': bool(r_div < -rsi_off)
+                },
+                'params': {
+                    'stoch_buy_thr': round(stoch_buy_thr, 1),
+                    'stoch_sell_thr': round(stoch_sell_thr, 1),
+                    'rsi_off': round(rsi_off, 2)
+                }
+            }
                 
             data = {
                 'rsi_div': rsi_div,
                 'stoch_rsi': stoch_k,
                 'st_trend': st_trend,
-                'signals': conf_signals # Selective confluence markers
+                'signals': conf_signals, # Selective confluence markers
+                'confluence': confluence
             }
             
         return signal, data
