@@ -3,7 +3,7 @@ services:
     name: apex-terminal
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -c gunicorn_config.py dashboard:app
+    startCommand: gunicorn -k eventlet -w 1 --bind 0.0.0.0:$PORT dashboard:app
     envVars:
       - key: BINANCE_API_KEY
         sync: false

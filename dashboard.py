@@ -80,6 +80,13 @@ def stream_updates():
 def handle_connect():
     logging.info("Cliente conectado via WebSocket")
     emit('status_msg', {'msg': 'Conectado al APEX Stream'})
+    
+    # Start background tasks if not already started
+    if not hasattr(app, 'bot_threads_started'):
+        app.bot_threads_started = True
+        socketio.start_background_task(bot_loop)
+        socketio.start_background_task(stream_updates)
+        logging.info("Hilos de fondo iniciados via SocketIO")
 
 @app.route('/')
 def index():
@@ -278,13 +285,17 @@ def history(symbol):
         return jsonify(h)
     return jsonify({"error": "Not found"}), 404
 
-# Iniciar hilos al importar el módulo (para Gunicorn/Render)
-# Solo si no es el proceso principal (que se maneja en el if __name__ abajo)
-if os.environ.get("GUNICORN_STARTED") or os.environ.get("RENDER"):
-    # Hilo del bot (Análisis y ejecución profunda)
-    threading.Thread(target=bot_loop, daemon=True).start()
-    # Hilo de streaming (Precios en tiempo real)
-    threading.Thread(target=stream_updates, daemon=True).start()
+# Iniciar hilos al cargar si estamos en Render
+if os.environ.get("RENDER"):
+    # Usamos un pequeño retardo para asegurar que socketio está listo
+    def init_background():
+        time.sleep(2)
+        socketio.start_background_task(bot_loop)
+        socketio.start_background_task(stream_updates)
+        logging.info("Hilos de fondo (Render) iniciados")
+    
+    # Intentamos iniciarlos de forma no bloqueante
+    threading.Thread(target=init_background, daemon=True).start()
 
 if __name__ == '__main__':
     # Hilo del bot (Análisis y ejecución profunda)
