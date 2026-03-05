@@ -44,13 +44,36 @@ body {
 }
 
 .sidebar {
+    background: #131722;
+    border-right: 1px solid var(--border-glass);
+    padding: 15px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 15px;
-    background-color: var(--bg-sidebar);
-    border-right: 1px solid var(--border-glass);
     overflow-y: auto;
+}
+
+#strategy-box {
+    background: rgba(41, 98, 255, 0.03);
+    border: 1px solid var(--border-glass);
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 8px;
+    height: 320px !important;
+    flex-shrink: 0 !important;
+    /* Prevents sidebar from shrinking the box */
+    /* Fixed height to fit Opt 4 and prevent any shifts */
+    display: flex;
+    flex-direction: column;
+    overflow: visible !important;
+    /* Ensure everything is visible at a glance */
+}
+
+.strategy-content {
+    display: none;
+}
+
+.strategy-content.active {
+    display: block;
 }
 
 .main-content {
@@ -79,7 +102,43 @@ body {
 .charts-grid {
     display: grid;
     grid-template-rows: 60% 40%;
+    grid-template-columns: 1fr;
     overflow: hidden;
+    width: 100%;
+    min-width: 0;
+}
+
+.charts-grid.split {
+    grid-template-rows: 60% 40%;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    background: var(--bg-main);
+}
+
+#pane-1 {
+    grid-row: 1;
+    grid-column: 1;
+}
+
+#pane-2 {
+    grid-row: 1;
+    grid-column: 2;
+    display: none;
+    /* Hide by default */
+}
+
+.charts-grid.split #pane-2 {
+    display: flex;
+    /* Show as flex only when split */
+}
+
+#indicator-container {
+    grid-row: 2;
+    grid-column: 1;
+}
+
+.charts-grid.split #indicator-container {
+    grid-column: 1 / span 2;
 }
 
 .pane-tv {
@@ -87,11 +146,70 @@ body {
     width: 100%;
     height: 100%;
     border-bottom: 1px solid var(--border-glass);
+    z-index: 10;
+    /* Ensure charts are above background but below modals */
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    /* Allow grid to shrink this below content width */
+}
+
+.pane-tv.focused {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: -2px;
+}
+
+.chart-header {
+    display: none;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 10px;
+    background: rgba(30, 34, 45, 0.9);
+    border-bottom: 1px solid var(--border-glass);
+    font-size: 11px;
+}
+
+.charts-grid.split .chart-header {
+    display: flex;
+}
+
+.chart-title {
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.mini-tf-selector {
+    display: flex;
+    gap: 2px;
+}
+
+.mini-tf-btn {
+    background: transparent;
+    border: 1px solid #333;
+    color: var(--text-muted);
+    font-size: 9px;
+    padding: 1px 4px;
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+.mini-tf-btn.active {
+    background: var(--accent-blue);
+    color: white;
+    border-color: var(--accent-blue);
+}
+
+#c-price,
+#c-price-2 {
+    flex: 1;
+    /* Make the chart container fill remaining space */
 }
 
 .panes-indicators {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    z-index: 5;
+    /* Keep indicators below main charts if they overlap */
 }
 
 .indicator-pane {

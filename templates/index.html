@@ -13,12 +13,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 
     <style>
-        .charts-grid.split {
-            grid-template-rows: 1fr !important;
-            grid-template-columns: 1fr 1fr !important;
-            gap: 10px;
-        }
-
         #log-modal,
         #profit-modal {
             display: none;
@@ -263,8 +257,7 @@
             </div>
 
             <!-- Indicator Settings -->
-            <div
-                style="background: rgba(41, 98, 255, 0.03); padding: 10px; border-radius: 4px; border: 1px solid var(--border-glass); margin-bottom: 8px;">
+            <div id="strategy-box">
                 <div class="tab-header">
                     <button class="tab-btn active" onclick="switchStrategy(1)">Opt 1</button>
                     <button class="tab-btn" onclick="switchStrategy(2)">Opt 2</button>
@@ -436,6 +429,40 @@
                 </div>
             </div>
 
+            <!-- Auto Trading Control -->
+            <div class="glass-pane" style="background: rgba(38, 166, 154, 0.03); padding: 10px; margin-bottom: 10px;">
+                <div
+                    style="font-size: 9px; color: var(--green); font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+                    Configuración Auto Trading</div>
+
+                <div style="margin-bottom: 8px;">
+                    <label
+                        style="display: block; font-size: 8px; color: var(--text-muted); margin-bottom: 2px;">Timeframe
+                        de
+                        Trading</label>
+                    <select id="trading_tf"
+                        style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px; cursor: pointer;">
+                        <option value="1m">1 minute</option>
+                        <option value="5m">5 minutes</option>
+                        <option value="15m">15 minutes</option>
+                        <option value="1h" selected>1 hour</option>
+                        <option value="1d">1 day</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                    <button id="btn-off" onclick="setTradingMode('OFF')"
+                        style="flex:1; font-size: 8px; padding: 4px; background: #2a2e39; color: white; border: 1px solid #333; cursor: pointer; border-radius: 2px;">OFF</button>
+                    <button id="btn-sim" onclick="setTradingMode('SIM')"
+                        style="flex:1; font-size: 8px; padding: 4px; background: #2a2e39; color: white; border: 1px solid #333; cursor: pointer; border-radius: 2px;">SIM</button>
+                    <button id="btn-real" onclick="setTradingMode('REAL')"
+                        style="flex:1; font-size: 8px; padding: 4px; background: #2a2e39; color: white; border: 1px solid #333; cursor: pointer; border-radius: 2px;">REAL</button>
+                </div>
+                <div id="trading-status"
+                    style="font-size: 9px; margin-top: 6px; color: var(--text-muted); text-align: center;">Estado: <span
+                        style="font-weight:bold;">OFF</span></div>
+            </div>
+
             <!-- Capital Settings -->
             <div
                 style="background: rgba(240, 98, 146, 0.03); padding: 10px; border-radius: 4px; border: 1px solid var(--border-glass); margin-bottom: 10px;">
@@ -502,39 +529,6 @@
                 </button>
             </div>
 
-            <!-- Auto Trading Control -->
-            <div class="glass-pane" style="background: rgba(38, 166, 154, 0.03); padding: 10px; margin-bottom: 10px;">
-                <div
-                    style="font-size: 9px; color: var(--green); font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
-                    Configuración Auto Trading</div>
-
-                <div style="margin-bottom: 8px;">
-                    <label
-                        style="display: block; font-size: 8px; color: var(--text-muted); margin-bottom: 2px;">Timeframe
-                        de
-                        Trading</label>
-                    <select id="trading_tf"
-                        style="width: 100%; background: #131722; border: 1px solid #2a2e39; color: white; border-radius: 2px; padding: 2px; font-size: 10px; cursor: pointer;">
-                        <option value="1m">1 minute</option>
-                        <option value="5m">5 minutes</option>
-                        <option value="15m">15 minutes</option>
-                        <option value="1h" selected>1 hour</option>
-                        <option value="1d">1 day</option>
-                    </select>
-                </div>
-
-                <div style="display: flex; gap: 4px; margin-bottom: 8px;">
-                    <button id="btn-off" onclick="setTradingMode('OFF')"
-                        style="flex:1; font-size: 8px; padding: 4px; background: #2a2e39; color: white; border: 1px solid #333; cursor: pointer; border-radius: 2px;">OFF</button>
-                    <button id="btn-sim" onclick="setTradingMode('SIM')"
-                        style="flex:1; font-size: 8px; padding: 4px; background: #2a2e39; color: white; border: 1px solid #333; cursor: pointer; border-radius: 2px;">SIM</button>
-                    <button id="btn-real" onclick="setTradingMode('REAL')"
-                        style="flex:1; font-size: 8px; padding: 4px; background: #2a2e39; color: white; border: 1px solid #333; cursor: pointer; border-radius: 2px;">REAL</button>
-                </div>
-                <div id="trading-status"
-                    style="font-size: 9px; margin-top: 6px; color: var(--text-muted); text-align: center;">Estado: <span
-                        style="font-weight:bold;">OFF</span></div>
-            </div>
 
             <!-- Signal Diagnostic (Confluence) -->
             <div id="diagnostic-pane" class="glass-pane"
@@ -629,8 +623,34 @@
             </header>
 
             <main class="charts-grid" id="main-charts-grid">
-                <div class="pane-tv" id="c-price"></div>
-                <div class="pane-tv" id="c-price-2" style="display: none; border-left: 1px solid var(--border-glass);">
+                <div class="pane-tv focused" id="pane-1" onclick="focusChart(1)">
+                    <div class="chart-header">
+                        <div class="chart-title" id="title-1">BTC/USDC</div>
+                        <div class="mini-tf-selector" id="mini-tf-1">
+                            <button class="mini-tf-btn" onclick="setTimeframe('1m', 1)">1m</button>
+                            <button class="mini-tf-btn" onclick="setTimeframe('5m', 1)">5m</button>
+                            <button class="mini-tf-btn" onclick="setTimeframe('15m', 1)">15m</button>
+                            <button class="mini-tf-btn active" onclick="setTimeframe('1h', 1)">1h</button>
+                            <button class="mini-tf-btn" onclick="setTimeframe('4h', 1)">4h</button>
+                            <button class="mini-tf-btn" onclick="setTimeframe('1d', 1)">1d</button>
+                        </div>
+                    </div>
+                    <div id="c-price" style="width:100%; height:100%;"></div>
+                </div>
+
+                <div class="pane-tv" id="pane-2" onclick="focusChart(2)">
+                    <div class="chart-header">
+                        <div class="chart-title" id="title-2">ETH/USDC</div>
+                        <div class="mini-tf-selector" id="mini-tf-2">
+                            <button class="mini-tf-btn" onclick="setTimeframe('1m', 2)">1m</button>
+                            <button class="mini-tf-btn" onclick="setTimeframe('5m', 2)">5m</button>
+                            <button class="mini-tf-btn" onclick="setTimeframe('15m', 2)">15m</button>
+                            <button class="mini-tf-btn active" onclick="setTimeframe('1h', 2)">1h</button>
+                            <button class="mini-tf-btn" onclick="setTimeframe('4h', 2)">4h</button>
+                            <button class="mini-tf-btn" onclick="setTimeframe('1d', 2)">1d</button>
+                        </div>
+                    </div>
+                    <div id="c-price-2" style="width:100%; height:100%;"></div>
                 </div>
                 <div class="panes-indicators" id="indicator-container">
                     <!-- Opt 1 -->
@@ -719,8 +739,15 @@
     <script>
         // Use VAR for extreme compatibility (ES5)
         // Use VAR for extreme compatibility (ES5)
-        var currentSymbol = "BTC/USDC";
-        var currentTimeframe = "1h";
+        var currentSymbol1 = "BTC/USDC";
+        var currentTimeframe1 = "1h";
+        var currentSymbol2 = "ETH/USDC";
+        var currentTimeframe2 = "1h";
+        var focusedChart = 1;
+
+        // Legacy/Compat aliases for existing functions if needed
+        var currentSymbol = currentSymbol1;
+        var currentTimeframe = currentTimeframe1;
 
         // WebSocket Connection
         var socket = io();
@@ -730,19 +757,19 @@
         });
 
         socket.on('price_update', function (updates) {
-            // Update Main Chart
-            if (updates[currentSymbol] && series.candles) {
-                var up = updates[currentSymbol];
+            // Update Chart 1
+            if (updates[currentSymbol1] && series.candles) {
+                var up = updates[currentSymbol1];
                 series.candles.update({
                     time: up.timestamp,
-                    open: up.price, // Note: For tick updates, we might use the price as O/H/L/C if it's the first tick of the candle
+                    open: up.price,
                     high: up.price,
                     low: up.price,
                     close: up.price
                 });
             }
 
-            // Update Multi-view Chart
+            // Update Chart 2
             if (isMultiView && updates[currentSymbol2] && series.candles2) {
                 var up2 = updates[currentSymbol2];
                 series.candles2.update({
@@ -823,17 +850,14 @@
         };
 
         var isMultiView = false;
-        var currentSymbol2 = "ETH/USDC";
 
         function toggleMultiView() {
             isMultiView = !isMultiView;
             var grid = document.getElementById('main-charts-grid');
-            var c2 = document.getElementById('c-price-2');
             var btn = document.getElementById('mv-toggle');
 
             if (isMultiView) {
                 grid.classList.add('split');
-                c2.style.display = 'block';
                 btn.style.background = 'rgba(41, 98, 255, 0.3)';
                 btn.style.borderColor = 'var(--accent-blue)';
 
@@ -843,13 +867,15 @@
                 update2();
             } else {
                 grid.classList.remove('split');
-                c2.style.display = 'none';
                 btn.style.background = 'rgba(255, 255, 255, 0.05)';
                 btn.style.borderColor = 'rgba(255,255,255,0.2)';
+                focusChart(1); // Back to single view, focus chart 1
             }
 
             // Re-trigger resize for all
-            window.onresize();
+            setTimeout(function () {
+                window.onresize();
+            }, 100);
         }
 
         function toggleLogs() {
@@ -980,28 +1006,38 @@
 
                 // Simple Resize
                 window.onresize = function () {
-                    charts.price.resize(pCont.clientWidth, 300);
-
-                    // If modal is open, resize profit chart to modal body size
+                    var pCont1 = document.getElementById('c-price');
+                    if (charts.price && pCont1) {
+                        charts.price.resize(pCont1.clientWidth, pCont1.clientHeight || 400);
+                    }
+                    var pCont2 = document.getElementById('c-price-2');
+                    if (isMultiView && charts.price2 && pCont2) {
+                        charts.price2.resize(pCont2.clientWidth, pCont2.clientHeight || 400);
+                    }
+                    var rCont = document.getElementById('c-rsi');
+                    var sCont = document.getElementById('c-stoch');
+                    var eCont = document.getElementById('c-ema-diff');
+                    var mCont = document.getElementById('c-macd');
+                    var aCont = document.getElementById('c-adx');
+                    if (charts.rsi && rCont) charts.rsi.resize(rCont.clientWidth, rCont.clientHeight || 150);
+                    if (charts.stoch && sCont) charts.stoch.resize(sCont.clientWidth, sCont.clientHeight || 150);
+                    if (charts.ema && eCont) charts.ema.resize(eCont.clientWidth, eCont.clientHeight || 300);
+                    if (charts.macd && mCont) charts.macd.resize(mCont.clientWidth, mCont.clientHeight || 150);
+                    if (charts.adx && aCont) charts.adx.resize(aCont.clientWidth, aCont.clientHeight || 150);
+                    if (isMultiView) {
+                        setTimeout(function () {
+                            if (charts.price && pCont1) charts.price.resize(pCont1.clientWidth, pCont1.clientHeight);
+                            if (charts.price2 && pCont2) charts.price2.resize(pCont2.clientWidth, pCont2.clientHeight);
+                        }, 50);
+                    }
                     var profitModal = document.getElementById('profit-modal');
-                    if (profitModal.style.display === 'block') {
+                    if (profitModal && profitModal.style.display === 'block') {
                         var prModalBody = document.getElementById('profit-modal-body');
                         if (charts.profit) charts.profit.resize(prModalBody.clientWidth - 30, prModalBody.clientHeight - 30);
                     }
-
-                    if (isMultiView && charts.price2) {
-                        charts.price2.resize(document.getElementById('c-price-2').clientWidth, grid.clientHeight);
-                    }
-
-                    // Resize all indicator charts
-                    charts.rsi.resize(rCont.clientWidth, 150);
-                    charts.stoch.resize(sCont.clientWidth, 150);
-                    charts.ema.resize(eCont.clientWidth, 300);
-                    charts.macd.resize(mCont.clientWidth, 150);
-                    charts.adx.resize(aCont.clientWidth, 150);
                 };
 
-                // Profit Curve (Now in Modal)
+                // Profit Curve
                 var prCont = document.getElementById('c-profit');
                 charts.profit = LightweightCharts.createChart(prCont, {
                     layout: { background: { type: 'solid', color: '#000' }, textColor: '#d1d4dc', fontSize: 10 },
@@ -1015,7 +1051,8 @@
                 updateTradeHistory();
                 updateLogs();
 
-                // Indicator Series Initialization... (already there)
+                document.getElementById('title-1').innerText = currentSymbol1;
+                document.getElementById('title-2').innerText = currentSymbol2;
 
             } catch (e) {
                 console.error("INIT FAIL: " + e.message);
@@ -1034,33 +1071,53 @@
                 upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
                 wickUpColor: '#26a69a', wickDownColor: '#ef5350'
             });
+            document.getElementById('title-2').innerText = currentSymbol2;
         }
 
         function update2() {
             if (!isMultiView) return;
-            var url = "/api/history/" + encodeURIComponent(currentSymbol2) + "?tf=" + currentTimeframe;
+            var url = "/api/history/" + encodeURIComponent(currentSymbol2) + "?tf=" + currentTimeframe2;
             fetch(url).then(r => r.json()).then(data => {
                 if (data.candles) {
                     series.candles2.setData(data.candles);
+                    document.getElementById('title-2').innerText = currentSymbol2;
                 }
+            }).catch(err => console.error("Update2 Fail:", err));
+        }
+
+        function setTimeframe(tf, chartIdx) {
+            if (!chartIdx) chartIdx = focusedChart;
+            if (chartIdx === 1) {
+                currentTimeframe1 = tf;
+                currentTimeframe = tf; // Legacy support
+                update();
+            } else {
+                currentTimeframe2 = tf;
+                update2();
+            }
+            updateTFUI(tf, chartIdx);
+        }
+
+        function updateTFUI(tf, chartIdx) {
+            // Main buttons (only relevant for Chart 1 usually, but let's sync if chart 1 is focused)
+            if (chartIdx === 1) {
+                var btns = document.querySelectorAll('.header-actions .tf-btn, #tf-selector .tf-btn');
+                btns.forEach(function (b) {
+                    b.classList.remove('active');
+                    if (b.innerText === tf) b.classList.add('active');
+                });
+            }
+
+            // Mini buttons
+            var miniBtns = document.querySelectorAll('#mini-tf-' + chartIdx + ' .mini-tf-btn');
+            miniBtns.forEach(function (b) {
+                b.classList.remove('active');
+                if (b.innerText === tf) b.classList.add('active');
             });
         }
 
-        function setTimeframe(tf) {
-            currentTimeframe = tf;
-            // Update UI
-            var btns = document.getElementsByClassName('tf-btn');
-            for (var i = 0; i < btns.length; i++) {
-                btns[i].classList.remove('active');
-                if (btns[i].innerText === tf) {
-                    btns[i].classList.add('active');
-                }
-            }
-            update();
-        }
-
         function update() {
-            var url = "/api/history/" + encodeURIComponent(currentSymbol) + "?tf=" + currentTimeframe;
+            var url = "/api/history/" + encodeURIComponent(currentSymbol1) + "?tf=" + currentTimeframe1;
             var xhr = new XMLHttpRequest();
             xhr.open("GET", url, true);
             xhr.onreadystatechange = function () {
@@ -1070,7 +1127,7 @@
                             var data = JSON.parse(xhr.responseText);
                             if (data.candles) series.candles.setData(data.candles);
 
-                            // Contextual data based on strategy
+                            // Contextual data based on strategy (Main Chart only for now)
                             if (activeStrategy === 1 || activeStrategy === 4) {
                                 if (data.rsi_div) series.rsi.setData(data.rsi_div);
                                 if (data.stoch_rsi) series.st_k.setData(data.stoch_rsi);
@@ -1088,7 +1145,7 @@
                             // Merge base signals with active entry marker
                             var markers = data.signals || [];
                             if (activePosition) {
-                                var matches = (activePosition.symbol.trim().toUpperCase() === currentSymbol.trim().toUpperCase());
+                                var matches = (activePosition.symbol.trim().toUpperCase() === currentSymbol1.trim().toUpperCase());
                                 if (matches) {
                                     markers.push({
                                         time: Math.floor(activePosition.entry_timestamp / 60) * 60, // Align to minute
@@ -1104,6 +1161,8 @@
                             if (series.st_k) series.st_k.setMarkers(markers);
 
                             charts.price.timeScale().fitContent();
+                            document.getElementById('title-1').innerText = currentSymbol1;
+
                             updateTradeHistory();
                             updateBalance();
 
@@ -1314,7 +1373,7 @@
                     }
                 }
             };
-            xhr.send(JSON.stringify({ action: action, symbol: currentSymbol }));
+            xhr.send(JSON.stringify({ action: action, symbol: currentSymbol1 }));
         }
 
         function updateWatchlist() {
@@ -1340,9 +1399,26 @@
         }
 
         function switchAsset(sym) {
-            currentSymbol = sym;
-            document.getElementById('active-symbol').innerText = sym + " (V3)";
-            update();
+            if (focusedChart === 1) {
+                currentSymbol1 = sym;
+                currentSymbol = sym; // Legacy
+                update();
+            } else {
+                currentSymbol2 = sym;
+                update2();
+            }
+            // Update global header to show current focused symbol
+            document.getElementById('active-symbol').innerText = sym + " (FOCUS)";
+        }
+
+        function focusChart(idx) {
+            focusedChart = idx;
+            document.querySelectorAll('.pane-tv').forEach(function (p, i) {
+                p.classList.toggle('focused', (i + 1) === idx);
+            });
+            // Update global timeframe selector to match focused chart
+            var currentTF = (idx === 1) ? currentTimeframe1 : currentTimeframe2;
+            updateTFUI(currentTF, idx);
         }
 
         function jumpToTrade(timestamp) {
