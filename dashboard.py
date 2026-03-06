@@ -15,15 +15,16 @@ load_dotenv()
 
 from logging.handlers import RotatingFileHandler
 
-# Configuración básica con archivo y consola
-log_file = 'bot_activity.log'
+# Configuración básica con archivo y consola (Archivo desactivado en Render)
+log_handlers = [logging.StreamHandler()]
+if not os.environ.get("RENDER"):
+    log_file = 'bot_activity.log'
+    log_handlers.append(RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=2))
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=2),
-        logging.StreamHandler()
-    ]
+    handlers=log_handlers
 )
 
 app = Flask(__name__)
@@ -87,6 +88,10 @@ def handle_connect():
         socketio.start_background_task(bot_loop)
         socketio.start_background_task(stream_updates)
         logging.info("Hilos de fondo iniciados via SocketIO")
+
+@app.route('/health')
+def health():
+    return "OK", 200
 
 @app.route('/')
 def index():
@@ -285,17 +290,8 @@ def history(symbol):
         return jsonify(h)
     return jsonify({"error": "Not found"}), 404
 
-# Iniciar hilos al cargar si estamos en Render
-if os.environ.get("RENDER"):
-    # Usamos un pequeño retardo para asegurar que socketio está listo
-    def init_background():
-        time.sleep(2)
-        socketio.start_background_task(bot_loop)
-        socketio.start_background_task(stream_updates)
-        logging.info("Hilos de fondo (Render) iniciados")
-    
-    # Intentamos iniciarlos de forma no bloqueante
-    threading.Thread(target=init_background, daemon=True).start()
+# Iniciar hilos al cargar si estamos en Render (Desactivado para dar prioridad al arranque)
+# Se iniciarán automáticamente al conectar el primer SocketIO client
 
 if __name__ == '__main__':
     # Hilo del bot (Análisis y ejecución profunda)
