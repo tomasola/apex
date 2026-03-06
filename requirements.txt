@@ -1,7 +1,7 @@
 ccxt
 flask
 flask-socketio
-eventlet
+gevent
 pandas
 numpy
 requests
